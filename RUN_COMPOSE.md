@@ -48,6 +48,7 @@ Sau vài giây, kiểm tra health của mỗi service:
 ```bash
 # API
 curl http://localhost:8000/health
+![api](image.png)
 
 # AI service
 curl http://localhost:9000/health
@@ -55,7 +56,7 @@ curl http://localhost:9000/health
 # DB readiness
 docker exec -it fit4110-db-lab05 pg_isready -U $POSTGRES_USER
 ```
-
+![dbreadiness](image-1.png)
 Bạn cũng có thể truy cập endpoint `/predict` của AI service để xem kết quả mẫu:
 
 ```bash
@@ -69,6 +70,7 @@ curl -X POST http://localhost:9000/predict
 ```bash
 npm run test:compose
 ```
+![runtestcompose](image-2.png)
 
 Report sinh tại:
 

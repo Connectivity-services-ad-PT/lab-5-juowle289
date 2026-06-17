@@ -1,0 +1,127 @@
+openapi: 3.1.0
+info:
+  title: Smart Campus — Core Business API (mock tối giản)
+  version: 0.1.0
+  description: |
+    File mock tối giản dùng cho consumer-side smoke test của team-gate.
+    Chỉ có endpoint POST /policies/evaluate-access.
+    Thay bằng contract chính thức của team-core khi có.
+  contact:
+    name: team-core
+    email: team-core@smart-campus.local
+servers:
+  - url: http://localhost:4013
+    description: Prism mock server for Core Business
+security:
+  - bearerAuth: []
+
+paths:
+  /policies/evaluate-access:
+    post:
+      tags: [policies]
+      operationId: evaluateAccessPolicy
+      summary: Đánh giá chính sách truy cập cho một sự kiện quẹt thẻ
+      description: Nhận thông tin quẹt thẻ từ Access Gate và trả về kết quả allow/deny theo chính sách hiện hành.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [card_id, gate_id, direction]
+              properties:
+                card_id:
+                  type: string
+                  example: CARD-001
+                gate_id:
+                  type: string
+                  example: GATE-A1
+                direction:
+                  type: string
+                  enum: [entry, exit]
+                  example: entry
+                role:
+                  type: string
+                  example: student
+            examples:
+              allow_case:
+                value:
+                  card_id: CARD-001
+                  gate_id: GATE-A1
+                  direction: entry
+                  role: student
+      responses:
+        "200":
+          description: Kết quả đánh giá chính sách truy cập
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [result]
+                properties:
+                  result:
+                    type: string
+                    enum: [allow, deny]
+                    example: allow
+                  reason:
+                    type: string
+                    example: valid_card_and_permission
+              examples:
+                allowed:
+                  value:
+                    result: allow
+                    reason: valid_card_and_permission
+        "400":
+          description: Request không hợp lệ
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              examples:
+                missing_field:
+                  value:
+                    type: https://smart-campus.local/problems/validation-error
+                    title: Validation error
+                    status: 400
+                    detail: card_id is required
+                    instance: /policies/evaluate-access
+        "401":
+          description: Thiếu hoặc sai bearer token
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              examples:
+                unauthorized:
+                  value:
+                    type: https://smart-campus.local/problems/unauthorized
+                    title: Unauthorized
+                    status: 401
+                    detail: Missing or invalid bearer token
+                    instance: /policies/evaluate-access
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ProblemDetails:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string

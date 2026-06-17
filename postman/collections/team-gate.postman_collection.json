@@ -1,0 +1,1051 @@
+{
+  "info": {
+    "_postman_id": "fit4110-lab03-team-gate",
+    "name": "FIT4110 Lab03 - Access Gate Contract Tests",
+    "description": "Postman Collection cho team-gate: kiểm thử dịch vụ kiểm soát ra/vào (Access Gate). Bao gồm Functional, Auth, Negative, Boundary/Reliability, Consumer-side Smoke và Local-only NonFunctional.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const prefix = pm.environment.get('tracePrefix') || 'fit4110-lab03-gate';",
+          "pm.variables.set('traceId', prefix + '-' + Date.now());",
+          "pm.request.headers.upsert({ key: 'X-Trace-Id', value: pm.variables.get('traceId') });"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00_Health",
+      "item": [
+        {
+          "name": "GET /health - service is alive",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Public health check, không cần auth."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Response has status ok and service name', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('status', 'ok');",
+                  "  pm.expect(json).to.have.property('service', 'access-gate');",
+                  "  pm.expect(json).to.have.property('version');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01_Functional",
+      "item": [
+        {
+          "name": "POST /access-events - happy path entry allowed",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"card_id\": \"CARD-001\",\n  \"gate_id\": \"GATE-A1\",\n  \"direction\": \"entry\",\n  \"timestamp\": \"2026-05-13T08:00:00+07:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Response has required event fields', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('event_id');",
+                  "  pm.expect(json).to.have.property('card_id', 'CARD-001');",
+                  "  pm.expect(json).to.have.property('gate_id', 'GATE-A1');",
+                  "  pm.expect(json).to.have.property('direction', 'entry');",
+                  "  pm.expect(json).to.have.property('result');",
+                  "  pm.expect(['allow', 'deny']).to.include(json.result);",
+                  "});",
+                  "pm.environment.set('lastEventId', pm.response.json().event_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /access-events - exit direction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Prefer",
+                "value": "example=exit_event"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"card_id\": \"CARD-002\",\n  \"gate_id\": \"GATE-B1\",\n  \"direction\": \"exit\",\n  \"timestamp\": \"2026-05-13T18:00:00+07:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Exit event response has required fields', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('event_id');",
+                  "  pm.expect(json).to.have.property('result');",
+                  "  pm.expect(['allow', 'deny']).to.include(json.result);",
+                  "  pm.expect(json).to.have.property('direction');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /access-events - list events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events?gate_id=GATE-A1&limit=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ],
+              "query": [
+                {
+                  "key": "gate_id",
+                  "value": "GATE-A1"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Response has items array and total', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('items');",
+                  "  pm.expect(json.items).to.be.an('array');",
+                  "  pm.expect(json).to.have.property('total');",
+                  "  pm.expect(json.total).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /cards/{card_id} - get existing card",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cards/CARD-001",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cards",
+                "CARD-001"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Card has required fields', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('card_id');",
+                  "  pm.expect(json).to.have.property('owner_name');",
+                  "  pm.expect(json).to.have.property('role');",
+                  "  pm.expect(json).to.have.property('status');",
+                  "  pm.expect(['active', 'expired', 'revoked']).to.include(json.status);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /cards - register new card",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cards",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cards"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n \"card_id\": \"CARD-012\",\n \"owner_name\": \"Nguyen Van A\",\n \"role\": \"student\",\n \"valid_until\": \"2027-12-31\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('New card has active status', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('card_id', 'CARD-012');",
+                  "  pm.expect(json).to.have.property('status', 'active');",
+                  "  pm.expect(json).to.have.property('created_at');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02_Auth",
+      "item": [
+        {
+          "name": "GET /access-events - valid token accepted",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events?limit=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Valid token returns 200', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /access-events - missing token rejected on real service",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"card_id\": \"CARD-001\",\n  \"gate_id\": \"GATE-A1\",\n  \"direction\": \"entry\",\n  \"timestamp\": \"2026-05-13T08:00:00+07:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const env = pm.environment.get('env') || 'mock';",
+                  "if (env === 'mock') {",
+                  "  pm.test('Skipped on mock: Prism does not enforce real auth', function () {",
+                  "    pm.expect(true).to.eql(true);",
+                  "  });",
+                  "} else {",
+                  "  pm.test('Missing token returns 401 or 403', function () {",
+                  "    pm.expect([401, 403]).to.include(pm.response.code);",
+                  "  });",
+                  "  pm.test('Error response has ProblemDetails shape', function () {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('title');",
+                  "    pm.expect(json).to.have.property('status');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /access-events - invalid token rejected on real service",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer this-is-not-a-valid-token"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"card_id\": \"CARD-001\",\n  \"gate_id\": \"GATE-A1\",\n  \"direction\": \"entry\",\n  \"timestamp\": \"2026-05-13T08:00:00+07:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const env = pm.environment.get('env') || 'mock';",
+                  "if (env === 'mock') {",
+                  "  pm.test('Skipped on mock: invalid token requires real auth middleware', function () {",
+                  "    pm.expect(true).to.eql(true);",
+                  "  });",
+                  "} else {",
+                  "  pm.test('Invalid token returns 401 or 403', function () {",
+                  "    pm.expect([401, 403]).to.include(pm.response.code);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03_Negative",
+      "item": [
+        {
+          "name": "POST /access-events - missing card_id returns 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Prefer",
+                "value": "code=400"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"gate_id\": \"GATE-A1\",\n  \"direction\": \"entry\",\n  \"timestamp\": \"2026-05-13T08:00:00+07:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Missing card_id returns client error', function () {",
+                  "  pm.expect([400, 422]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Error response follows ProblemDetails shape', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('title');",
+                  "  pm.expect(json).to.have.property('status');",
+                  "  pm.expect(json.status).to.be.within(400, 599);",
+                  "  pm.expect(json).to.have.property('detail');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /access-events - missing gate_id returns 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Prefer",
+                "value": "code=400"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"card_id\": \"CARD-001\",\n  \"direction\": \"entry\",\n  \"timestamp\": \"2026-05-13T08:00:00+07:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Missing gate_id returns client error', function () {",
+                  "  pm.expect([400, 422]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Error has detail field', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('detail');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /access-events - wrong direction enum returns 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Prefer",
+                "value": "code=400"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"card_id\": \"CARD-001\",\n  \"gate_id\": \"GATE-A1\",\n  \"direction\": \"sideways\",\n  \"timestamp\": \"2026-05-13T08:00:00+07:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invalid direction enum returns client error', function () {",
+                  "  pm.expect([400, 422]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Error response has detail', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('detail');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /cards - wrong role enum returns 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Prefer",
+                "value": "code=400"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cards",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cards"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"card_id\": \"CARD-099\",\n  \"owner_name\": \"Test User\",\n  \"role\": \"admin_superuser\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invalid role enum returns client error', function () {",
+                  "  pm.expect([400, 422]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Error has ProblemDetails shape', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('title');",
+                  "  pm.expect(json).to.have.property('status');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /cards/{card_id} - non-existent card returns 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Prefer",
+                "value": "code=404"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cards/CARD-999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cards",
+                "CARD-999"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Non-existent card returns 404', function () {",
+                  "  pm.response.to.have.status(404);",
+                  "});",
+                  "pm.test('404 response has ProblemDetails shape', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.status).to.eql(404);",
+                  "  pm.expect(json).to.have.property('detail');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04_Boundary_Reliability",
+      "item": [
+        {
+          "name": "GET /access-events - limit at maximum (100) accepted",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events?limit=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Limit at max (100) returns 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response contains items array', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.items).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /access-events - limit above max (101) rejected",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Prefer",
+                "value": "code=400"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events?limit=101",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "101"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Limit above max returns client error', function () {",
+                  "  pm.expect([400, 422]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Boundary test checks response status code', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('status');",
+                  "  pm.expect(json.status).to.be.within(400, 599);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /access-events - limit at minimum (1) accepted",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events?limit=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Limit at min (1) returns 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Items array has at most 1 element', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.items.length).to.be.at.most(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /access-events - filter by result=allow",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events?result=allow&limit=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ],
+              "query": [
+                {
+                  "key": "result",
+                  "value": "allow"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Filter by result=allow returns 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('All returned events have result=allow', function () {",
+                  "  const json = pm.response.json();",
+                  "  json.items.forEach(function(item) {",
+                  "    pm.expect(item.result).to.eql('allow');",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06_Local_only_NonFunctional",
+      "item": [
+        {
+          "name": "POST /access-events - local response time threshold",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ]
+            },
+            "description": "Latency test chỉ chạy trên service thật (env=local), không dùng mock để đo SLA.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"card_id\": \"CARD-001\",\n  \"gate_id\": \"GATE-A1\",\n  \"direction\": \"entry\",\n  \"timestamp\": \"2026-05-13T08:00:00+07:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const env = pm.environment.get('env') || 'mock';",
+                  "if (env === 'local') {",
+                  "  pm.test('Local service responds under 1000ms', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                  "  });",
+                  "} else {",
+                  "  pm.test('Skipped on mock: mock latency is not evidence of real service reliability', function () {",
+                  "    pm.expect(true).to.eql(true);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /access-events - local list response time",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/access-events?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "access-events"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const env = pm.environment.get('env') || 'mock';",
+                  "if (env === 'local') {",
+                  "  pm.test('List endpoint responds under 2000ms on local', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "  });",
+                  "} else {",
+                  "  pm.test('Skipped on mock', function () { pm.expect(true).to.eql(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Docker
+.dockerignore
+*.log
+volumes/
+postgres_data/
+
+# Reports (chỉ giữ file mới nhất nếu cần)
+reports/*.xml
+reports/*.html
+
+# Node
+node_modules/
+npm-debug.log
+
+# OS
+.DS_Store
+Thumbs.db
